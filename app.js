@@ -34,7 +34,6 @@ const state = {
   correct: 0
 };
 
-let audioEl = null;
 const PAGE = 100;
 let rendered = 0;
 let currentItems = [];
@@ -78,52 +77,6 @@ function load() {
     state.mastered = new Set(d.mastered || []);
     state.wrong = d.wrong || {};
   } catch (e) { /* 忽略损坏数据 */ }
-}
-
-/* ---------------- 发音 ---------------- */
-/** 播放单词；repeats 遍数由设置决定，最后一遍播完回调 done */
-function playWord(w, done) {
-  stopAudio();
-  const rel = state.accent === 'uk' ? w.uk_audio : w.us_audio;
-  const src = rel ? 'data/' + rel : null;
-  if (!src) { speakTTS(w.w, done); return; }
-  const total = Math.max(1, state.repeats | 0);
-  let left = total;
-  const once = () => {
-    left -= 1;
-    audioEl = new Audio(src);
-    audioEl.playbackRate = state.rate;
-    audioEl.onended = () => {
-      if (left > 0) setTimeout(once, 380);
-      else if (done) done();
-    };
-    audioEl.play().catch(() => (left > 0 ? setTimeout(once, 380) : (done && done())));
-  };
-  once();
-}
-
-function speakTTS(text, done) {
-  const synth = window.speechSynthesis;
-  if (!synth) { done && done(); return; }
-  let left = Math.max(1, state.repeats | 0);
-  const say = () => {
-    const u = new SpeechSynthesisUtterance(text);
-    u.lang = state.accent === 'uk' ? 'en-GB' : 'en-US';
-    u.rate = state.rate;
-    u.onend = () => {
-      left -= 1;
-      if (left > 0) setTimeout(say, 380);
-      else if (done) done();
-    };
-    u.onerror = () => { left = 0; done && done(); };
-    synth.speak(u);
-  };
-  synth.cancel();
-  say();
-}
-function stopAudio() {
-  if (audioEl) { audioEl.pause(); audioEl = null; }
-  if (window.speechSynthesis) window.speechSynthesis.cancel();
 }
 
 /* ---------------- 页 → 天 ---------------- */
@@ -336,7 +289,7 @@ function bind() {
   });
 
   const sheet = $('#sheet');
-  $('#settingsBtn').addEventListener('click', () => { renderThemes(); sheet.hidden = false; });
+  $('#settingsBtn').addEventListener('click', () => { a2hsClose(); renderThemes(); sheet.hidden = false; });
   $('#closeSheet').addEventListener('click', () => { sheet.hidden = true; });
   sheet.addEventListener('click', (e) => { if (e.target === sheet) sheet.hidden = true; });
   $('#optAccent').addEventListener('change', (e) => {
@@ -381,100 +334,6 @@ function bind() {
     state.mastered.clear(); state.wrong = {};
     save(); updateHeader(); renderDayBar(); renderList(); renderWrong();
     toast('进度已清空');
-  });
-}
-
-/* ---------------- 离线打包 ---------------- */
-/** 全部发音文件的路径（美音 + 英音），打包时一次性灌进手机缓存 */
-function audioUrls() {
-  const out = [];
-  state.words.forEach((w) => {
-    if (w.us_audio) out.push('data/' + w.us_audio);
-    if (w.uk_audio) out.push('data/' + w.uk_audio);
-  });
-  return out;
-}
-
-function offlineSetup() {
-  const btn = $('#offlineBtn');
-  const bar = $('#offlineBar');
-  const wrap = $('#offlineBarWrap');
-  const st = $('#offlineStatus');
-  if (!btn || !st) return;
-
-  // 双击本地文件打开时没有 Service Worker，打包功能用不了
-  if (!('serviceWorker' in navigator) || location.protocol === 'file:') {
-    st.textContent = '用网址打开时才能打包（双击文件不支持）';
-    btn.disabled = true;
-    return;
-  }
-
-  const urls = audioUrls();
-
-  navigator.serviceWorker.addEventListener('message', (ev) => {
-    const d = ev.data || {};
-    if (d.type === 'offline-progress') {
-      wrap.hidden = false;
-      bar.style.width = ((d.done / Math.max(1, d.total)) * 100).toFixed(1) + '%';
-      st.textContent = '正在打包 ' + d.done + ' / ' + d.total;
-    } else if (d.type === 'offline-done') {
-      wrap.hidden = false;
-      bar.style.width = '100%';
-      btn.disabled = false;
-      if (d.fail) {
-        st.textContent = '打包完成，' + d.fail + ' 个没下成功，可再点一次补齐';
-        btn.textContent = '📥 补齐剩余';
-      } else {
-        st.textContent = '✅ 已全部打包，以后不联网也能用';
-        btn.textContent = '✅ 已打包';
-      }
-    } else if (d.type === 'offline-status') {
-      if (d.have >= d.total) {
-        st.textContent = '✅ 已全部打包，以后不联网也能用';
-        btn.textContent = '✅ 已打包';
-        wrap.hidden = false;
-        bar.style.width = '100%';
-      } else if (d.have > 0) {
-        st.textContent = '已缓存 ' + d.have + ' / ' + d.total + ' 个发音';
-      }
-    }
-  });
-
-  btn.addEventListener('click', async () => {
-    btn.disabled = true;
-    st.textContent = '准备中…';
-    try {
-      const reg = await navigator.serviceWorker.ready;
-      const sw = reg.active || navigator.serviceWorker.controller;
-      if (!sw) throw new Error('离线服务还没启动，刷新一下再试');
-      sw.postMessage({ type: 'cache-audio', urls });
-    } catch (e) {
-      st.textContent = '打包失败：' + (e.message || e);
-      btn.disabled = false;
-    }
-  });
-
-  // 启动时问一下已经存了多少
-  navigator.serviceWorker.ready.then((reg) => {
-    const sw = reg.active || navigator.serviceWorker.controller;
-    if (sw) sw.postMessage({ type: 'cache-status', urls });
-  }).catch(() => {});
-}
-
-/* ---------------- 添加到主屏幕提示 ---------------- */
-function a2hsSetup() {
-  const el = $('#a2hs');
-  if (!el) return;
-  let seen = false;
-  try { seen = localStorage.getItem('kaoyan_a2hs') === '1'; } catch (e) { /* 忽略 */ }
-  const standalone = window.navigator.standalone === true
-    || (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
-  const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
-  if (standalone || seen || !isIOS) return;
-  el.hidden = false;
-  $('#a2hsClose').addEventListener('click', () => {
-    el.hidden = true;
-    try { localStorage.setItem('kaoyan_a2hs', '1'); } catch (e) { /* 忽略 */ }
   });
 }
 
@@ -549,7 +408,14 @@ async function boot() {
 
   // file:// 下有的浏览器会直接抛 DOMException，包一层别让它中断启动
   try {
-    if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+    if ('serviceWorker' in navigator) {
+      // 有新版本接管时自动刷新一次，省得用户关两次才看到更新
+      const hadController = !!navigator.serviceWorker.controller;
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (hadController && performance.now() < 8000) location.reload();
+      });
+      navigator.serviceWorker.register('sw.js').catch(() => {});
+    }
   } catch (e) { /* 本地文件打开时离线缓存本来也用不上 */ }
 
   offlineSetup();
