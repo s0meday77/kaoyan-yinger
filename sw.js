@@ -1,6 +1,7 @@
 /* 离线缓存：外壳常驻，音频按需缓存 + 一键全量打包 */
-const VER = 'v7';
-const SHELL = ['index.html', 'style.css', 'app.js', 'list.js', 'ui.js', 'practice.js',
+const VER = 'v8';
+// './' 也要缓存：从主屏幕图标启动时请求的是目录根，不是 index.html
+const SHELL = ['./', 'index.html', 'style.css', 'app.js', 'list.js', 'ui.js', 'practice.js',
                'manifest.webmanifest', 'data/words.js', 'data/words.json',
                'icons/icon-192.png', 'icons/icon-512.png'];
 
@@ -45,7 +46,16 @@ self.addEventListener('fetch', (e) => {
       const copy = res.clone();
       caches.open(VER).then((c) => c.put(req, copy));
       return res;
-    }).catch(() => caches.match(req))
+    }).catch(async () => {
+      const hit = await caches.match(req);
+      if (hit) return hit;
+      // 离线时不管是 /kaoyan-yinger/ 还是 /kaoyan-yinger/index.html？xx
+      // 一律回落到首页，交给前端路由处理
+      if (req.mode === 'navigate') {
+        return (await caches.match('index.html')) || (await caches.match('./')) || Response.error();
+      }
+      return Response.error();
+    })
   );
 });
 

@@ -1,7 +1,7 @@
 {
   "name": "考研英二 · 每天一课",
   "short_name": "考研英二",
-  "start_url": "./index.html",
+  "start_url": "./",
   "display": "standalone",
   "background_color": "#0f1117",
   "theme_color": "#5b5bd6",
