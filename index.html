@@ -101,6 +101,14 @@
   <div class="sheet-panel">
     <h3>设置</h3>
 
+    <p class="group">离线打包</p>
+    <div class="opt col">
+      <span>打包到手机后：<b>不用联网、不用开电脑</b>，点开就能全功能使用</span>
+      <button class="submit wide" id="offlineBtn">📥 打包到手机</button>
+      <div class="offline-bar" id="offlineBarWrap" hidden><i id="offlineBar"></i></div>
+      <span class="sub" id="offlineStatus">联网状态下点一次即可（约 46MB）</span>
+    </div>
+
     <p class="group">发音</p>
     <label class="opt"><span>口音</span>
       <select id="optAccent"><option value="us">美音</option><option value="uk">英音</option></select>
@@ -141,14 +149,6 @@
     <label class="opt switch"><span>答错必须重打 <em>错一次打三遍，忘不掉</em></span>
       <input type="checkbox" id="optMustRetype">
     </label>
-
-    <p class="group">离线打包</p>
-    <div class="opt col">
-      <span>打包到手机后：<b>不用联网、不用开电脑</b>，点开就能全功能使用</span>
-      <button class="submit wide" id="offlineBtn">📥 打包到手机</button>
-      <div class="offline-bar" id="offlineBarWrap" hidden><i id="offlineBar"></i></div>
-      <span class="sub" id="offlineStatus">联网状态下点一次即可（约 46MB）</span>
-    </div>
 
     <p class="group">外观</p>
     <div class="opt col"><span>背景皮肤</span>

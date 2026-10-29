@@ -418,6 +418,7 @@ function offlineSetup() {
       bar.style.width = ((d.done / Math.max(1, d.total)) * 100).toFixed(1) + '%';
       st.textContent = '正在打包 ' + d.done + ' / ' + d.total;
     } else if (d.type === 'offline-done') {
+      wrap.hidden = false;
       bar.style.width = '100%';
       btn.disabled = false;
       if (d.fail) {
