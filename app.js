@@ -460,6 +460,23 @@ function offlineSetup() {
   }).catch(() => {});
 }
 
+/* ---------------- 添加到主屏幕提示 ---------------- */
+function a2hsSetup() {
+  const el = $('#a2hs');
+  if (!el) return;
+  let seen = false;
+  try { seen = localStorage.getItem('kaoyan_a2hs') === '1'; } catch (e) { /* 忽略 */ }
+  const standalone = window.navigator.standalone === true
+    || (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
+  const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+  if (standalone || seen || !isIOS) return;
+  el.hidden = false;
+  $('#a2hsClose').addEventListener('click', () => {
+    el.hidden = true;
+    try { localStorage.setItem('kaoyan_a2hs', '1'); } catch (e) { /* 忽略 */ }
+  });
+}
+
 /* ---------------- 启动 ---------------- */
 async function boot() {
   load();
@@ -535,6 +552,7 @@ async function boot() {
   } catch (e) { /* 本地文件打开时离线缓存本来也用不上 */ }
 
   offlineSetup();
+  a2hsSetup();
 }
 
 // 一定要等所有 <script> 都执行完再启动：
