@@ -8,20 +8,73 @@
 
 let audioEl = null;
 
-/** 全部发音文件的路径（美音 + 英音），打包时一次性灌进手机缓存 */
+/** 这个词该用哪份录音：新录的三套音色优先，没有就退回有道的旧录音 */
+function audioPath(w) {
+  const v = w.v;
+  if (v) {
+    if (v[state.voice]) return v[state.voice];
+    // 选中的那一套缺了，随便挑一套有的，总比没声强
+    const anyKey = Object.keys(v)[0];
+    if (anyKey) return v[anyKey];
+  }
+  return state.accent === 'uk' ? w.uk_audio : w.us_audio;
+}
+
+/** 文件名规则：和 tools/tts_voices.py 的 safe_name 必须一模一样 */
+function safeName(s) {
+  return String(s).toLowerCase().replace(/ /g, '_').replace(/\//g, '_');
+}
+
+const VOICE_KEYS = ['m', 'f', 'c'];
+
+/** 词组录音的路径：audio/ph/<音色>/<单词>_<第几条>.mp3 */
+function phrasePath(w, idx, voice) {
+  return 'audio/ph/' + (voice || state.voice) + '/' + safeName(w.w) + '_' + idx + '.mp3';
+}
+
+/** 全部发音文件的路径（单词 + 词组，三个音色），打包时一次性灌进手机缓存 */
 function audioUrls() {
   const out = [];
   state.words.forEach((w) => {
-    if (w.us_audio) out.push('data/' + w.us_audio);
-    if (w.uk_audio) out.push('data/' + w.uk_audio);
+    if (w.v) {
+      Object.keys(w.v).forEach((k) => out.push('data/' + w.v[k]));
+    } else {
+      if (w.us_audio) out.push('data/' + w.us_audio);
+      if (w.uk_audio) out.push('data/' + w.uk_audio);
+    }
+    let i = 0;
+    (w.sb || []).forEach((b) => {
+      if (b.k !== '例') return;
+      if (b.p) VOICE_KEYS.forEach((k) => out.push('data/' + phrasePath(w, i, k)));
+      i += 1;
+    });
   });
   return out;
+}
+
+/** 播一条词组；录音不在就用系统语音兜底 */
+async function playPhrase(w, idx, text, done) {
+  stopAudio();
+  const file = 'data/' + phrasePath(w, idx);
+  if (location.protocol === 'file:') { playSrc(file, Math.max(1, state.repeats | 0), done); return; }
+  let url = null;
+  try {
+    const res = await fetch(file, { cache: 'force-cache' });
+    if (!res || !res.ok) throw new Error('没缓存');
+    const blob = await res.blob();
+    if (blob.size < 500) throw new Error('音频不完整');
+    url = URL.createObjectURL(blob);
+  } catch (e) {
+    speakTTS(text, done);      // 还没录到这个音色，先用系统语音顶着
+    return;
+  }
+  playSrc(url, Math.max(1, state.repeats | 0), done, () => URL.revokeObjectURL(url));
 }
 
 /** 播放单词；repeats 遍数由设置决定，最后一遍播完回调 done */
 async function playWord(w, done) {
   stopAudio();
-  const rel = state.accent === 'uk' ? w.uk_audio : w.us_audio;
+  const rel = audioPath(w);
   if (!rel) { speakTTS(w.w, done); return; }
   const file = 'data/' + rel;
   const total = Math.max(1, state.repeats | 0);
